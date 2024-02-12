@@ -1,11 +1,13 @@
+use std::cmp::min;
+
 #[rustfmt::skip]
 pub const TEST_DATA: [&str; 2] = 
-    ["-L|F7
+	["-L|F7
 7S-7|
 L|7||
 -L-J|
 L|-JF",
-    "7-F7-
+	"7-F7-
 .FJ|7
 SJLL7
 |F--J
@@ -13,20 +15,53 @@ LJ.LJ"];
 
 #[test]
 fn test1() {
-    let (pos, parsed) = parse(TEST_DATA[1]);
-    let mut curr_pos = Position::new(pos);
-	
-    loop {
-        curr_pos.walk(&parsed)
+    let (pos, mut parsed) = parse(TEST_DATA[1]);
+    let mut curr_pos0 = Position::new(pos, Direction::R);
+    let mut curr_pos1 = Position::new(pos, Direction::D);
+
+    curr_pos0.walk(&mut parsed);
+    curr_pos1.walk(&mut parsed);
+
+    while (curr_pos0.x, curr_pos0.y) != (curr_pos1.x, curr_pos1.y) {
+        curr_pos0.walk(&mut parsed);
+        curr_pos1.walk(&mut parsed);
     }
+
+    println!(
+        "Max seen: {}",
+        max(curr_pos0.max_steps_seen, curr_pos1.max_steps_seen)
+    );
 }
 
 pub struct Part1;
 
 impl Part1 {
-    fn solution() {}
+    fn solution() {
+        let (pos, mut parsed) = parse(TEST_DATA[1]);
+        let mut curr_pos0 = Position::new(pos, Direction::R);
+        let mut curr_pos1 = Position::new(pos, Direction::D);
+
+        curr_pos0.walk(&mut parsed);
+        curr_pos1.walk(&mut parsed);
+
+        while (curr_pos0.x, curr_pos0.y) != (curr_pos1.x, curr_pos1.y) {
+            curr_pos0.walk(&mut parsed);
+            curr_pos1.walk(&mut parsed);
+        }
+
+        println!(
+            "Max seen: {}",
+            max(curr_pos0.max_steps_seen, curr_pos1.max_steps_seen)
+        );
+    }
 }
 
+/// parses `&str` to a map of pipes,
+/// each holding the pipes shape and the distance to the starting position
+///
+/// # Returns
+/// * starting position as `(x, y)` and
+/// * the map as `Vec<Vec<Pipe>>`
 fn parse(input: &str) -> ((isize, isize), Vec<Vec<Pipe>>) {
     let mut vec: Vec<Vec<Pipe>> = vec![];
     let mut start_pos = None;
@@ -36,7 +71,6 @@ fn parse(input: &str) -> ((isize, isize), Vec<Vec<Pipe>>) {
             .chars()
             .enumerate()
             .map(|(j, ch)| {
-				dbg!(ch);
                 match ch {
                     'S' => start_pos = Some((j as isize, i as isize)),
                     _ => (),
@@ -56,9 +90,6 @@ fn parse(input: &str) -> ((isize, isize), Vec<Vec<Pipe>>) {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Pipe(char);
-
-#[derive(Debug, Clone, Copy)]
 pub enum Direction {
     U,
     D,
@@ -66,77 +97,111 @@ pub enum Direction {
     R,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Position {
+    // todo: change to usize or u32
     pub x: isize,
     pub y: isize,
     pub direction: Direction,
+    pub steps_taken: u32,
+    pub max_steps_seen: u32,
 }
-
+use std::cmp::max;
 impl Position {
-    fn walk(&mut self, map: &Vec<Vec<Pipe>>) {
+    fn walk(&mut self, map: &mut Vec<Vec<Pipe>>) {
         // get the next pipe by calculating the offset
-        let (dx, dy): (isize, isize) = match self.direction {
-            Direction::U => (0, 1),
-            Direction::D => (0, -1),
-            Direction::L => (-1, 0),
-            Direction::R => (1, 0),
-        };
+        let (dx, dy) = self.direction_to_offset();
 
-        let next_pipe = map[(self.y + dy) as usize][(self.y + dy) as usize];
-        dbg!(next_pipe);
+        let next_pipe = map[(self.y + dy) as usize][(self.x + dx) as usize];
+        dbg!(&next_pipe);
+
+        // update direction
+        #[rustfmt::skip]
+        let Ok(get_new_direction) = next_pipe.to_direction() else { return; };
+        self.direction = get_new_direction(self.direction);
+
+        dbg!(&self, map[self.y as usize][self.x as usize]);
+
+        // update position
         self.x += dx;
         self.y += dy;
+
+        // set current pipe steps to distance from Start
+        self.steps_taken += 1;
+        let x = map
+            .get_mut(self.y as usize)
+            .unwrap()
+            .get_mut(self.x as usize)
+            .unwrap();
+        x.1 = max(x.1, self.steps_taken);
+
+        self.max_steps_seen = x.1;
+        dbg!(&x);
     }
 
-    fn new(coords: (isize, isize)) -> Self {
+    fn direction_to_offset(&mut self) -> (isize, isize) {
+        match self.direction {
+            Direction::U => (0, -1),
+            Direction::D => (0, 1),
+            Direction::L => (-1, 0),
+            Direction::R => (1, 0),
+        }
+    }
+
+    fn new(coords: (isize, isize), dir: Direction) -> Self {
         let (x, y) = coords;
 
         Self {
             x,
             y,
-            direction: Direction::R,
+            direction: dir,
+            steps_taken: 0,
+            max_steps_seen: 0,
         }
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct Pipe(char, pub u32);
+
 impl Pipe {
     fn from(ch: char) -> Self {
-        Self(ch)
+        Self(ch, 0)
     }
-    /// returns a function that takes a direction and returns a new direction
-    pub fn to_direction(&self) -> impl Fn(Direction) -> Direction {
+    // /// returns a function that takes a direction and returns a new direction based on the pipes shape
+    fn to_direction(&self) -> Result<Box<dyn Fn(Direction) -> Direction>, char> {
         match self.0 {
-            '|' => |d| match d {
-                Direction::U => Direction::D,
-                Direction::D => Direction::U,
+            '|' => Ok(Box::new(|d: Direction| match d {
+                Direction::U => Direction::U,
+                Direction::D => Direction::D,
                 _ => panic!("{d:?}"),
-            },
-            '-' => |d| match d {
-                Direction::L => Direction::R,
-                Direction::R => Direction::L,
+            })),
+            '-' => Ok(Box::new(|d: Direction| match d {
+                Direction::L => Direction::L,
+                Direction::R => Direction::R,
                 _ => panic!("{d:?}"),
-            },
-            'L' => |d| match d {
+            })),
+            'L' => Ok(Box::new(|d| match d {
                 Direction::L => Direction::U,
                 Direction::D => Direction::R,
                 _ => panic!("{d:?}"),
-            },
-            'J' => |d| match d {
+            })),
+            'J' => Ok(Box::new(|d| match d {
                 Direction::R => Direction::U,
                 Direction::D => Direction::L,
                 _ => panic!("{d:?}"),
-            },
-            '7' => |d| match d {
+            })),
+            '7' => Ok(Box::new(|d| match d {
                 Direction::U => Direction::L,
                 Direction::R => Direction::D,
                 _ => panic!("{d:?}"),
-            },
-            'F' => |d| match d {
+            })),
+            'F' => Ok(Box::new(|d| match d {
                 Direction::L => Direction::D,
-                Direction::D => Direction::R,
+                Direction::U => Direction::R,
                 _ => panic!("{d:?}"),
-            },
-            _ => panic!("Unknown character"),
+            })),
+            ch => Err(ch),
         }
     }
 }

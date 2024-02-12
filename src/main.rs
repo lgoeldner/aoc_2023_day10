@@ -1,3 +1,5 @@
+use aoc_2023_day10::*;
+
 fn main() {
-    println!("Hello, world!");
+    Part1.solve();
 }

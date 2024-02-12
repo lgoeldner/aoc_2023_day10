@@ -1,5 +1,7 @@
 use std::cmp::min;
 
+pub mod part2;
+
 #[rustfmt::skip]
 pub const TEST_DATA: [&str; 2] = 
 	["-L|F7
@@ -36,10 +38,10 @@ fn test1() {
 pub struct Part1;
 
 impl Part1 {
-    fn solution() {
-        let (pos, mut parsed) = parse(TEST_DATA[1]);
+    pub fn solve(&self) {
+        let (pos, mut parsed) = parse(std::fs::read_to_string("data.txt").unwrap().as_str());
         let mut curr_pos0 = Position::new(pos, Direction::R);
-        let mut curr_pos1 = Position::new(pos, Direction::D);
+        let mut curr_pos1 = Position::new(pos, Direction::L);
 
         curr_pos0.walk(&mut parsed);
         curr_pos1.walk(&mut parsed);
@@ -107,20 +109,18 @@ pub struct Position {
     pub max_steps_seen: u32,
 }
 use std::cmp::max;
+use std::fmt::write;
+use std::fmt::Debug;
 impl Position {
-    fn walk(&mut self, map: &mut Vec<Vec<Pipe>>) {
+    fn walk(&mut self, map: &mut Vec<Vec<Pipe>>) -> Result<(), ()> {
         // get the next pipe by calculating the offset
         let (dx, dy) = self.direction_to_offset();
 
         let next_pipe = map[(self.y + dy) as usize][(self.x + dx) as usize];
-        dbg!(&next_pipe);
 
         // update direction
-        #[rustfmt::skip]
-        let Ok(get_new_direction) = next_pipe.to_direction() else { return; };
+        let get_new_direction = next_pipe.to_direction()?;
         self.direction = get_new_direction(self.direction);
-
-        dbg!(&self, map[self.y as usize][self.x as usize]);
 
         // update position
         self.x += dx;
@@ -136,7 +136,8 @@ impl Position {
         x.1 = max(x.1, self.steps_taken);
 
         self.max_steps_seen = x.1;
-        dbg!(&x);
+        Ok(())
+        // dbg!(&x);
     }
 
     fn direction_to_offset(&mut self) -> (isize, isize) {
@@ -161,15 +162,32 @@ impl Position {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+/// holds the pipes shape as `char` and the steps it has taken to get there.
+///
+/// `u32` Not zero if inside the loop
+#[derive(Clone, Copy)]
 pub struct Pipe(char, pub u32);
+
+impl From<char> for Pipe {
+    fn from(ch: char) -> Self {
+        Self(ch, 0)
+    }
+}
+
+impl Debug for Pipe {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let tmp = format!("{}({})", self.0, self.1);
+		f.write_str(&tmp)?;
+		Ok(())
+    }
+}
 
 impl Pipe {
     fn from(ch: char) -> Self {
         Self(ch, 0)
     }
     // /// returns a function that takes a direction and returns a new direction based on the pipes shape
-    fn to_direction(&self) -> Result<Box<dyn Fn(Direction) -> Direction>, char> {
+    fn to_direction(&self) -> Result<Box<dyn Fn(Direction) -> Direction>, ()> {
         match self.0 {
             '|' => Ok(Box::new(|d: Direction| match d {
                 Direction::U => Direction::U,
@@ -201,7 +219,7 @@ impl Pipe {
                 Direction::U => Direction::R,
                 _ => panic!("{d:?}"),
             })),
-            ch => Err(ch),
+            ch => Err(()),
         }
     }
 }

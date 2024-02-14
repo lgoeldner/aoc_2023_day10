@@ -16,23 +16,25 @@ SJLL7
 LJ.LJ"];
 
 #[test]
-fn test1() {
+fn test1() -> Result<(), ()> {
     let (pos, mut parsed) = parse(TEST_DATA[1]);
     let mut curr_pos0 = Position::new(pos, Direction::R);
     let mut curr_pos1 = Position::new(pos, Direction::D);
 
-    curr_pos0.walk(&mut parsed);
-    curr_pos1.walk(&mut parsed);
+    curr_pos0.walk(&mut parsed)?;
+    curr_pos1.walk(&mut parsed)?;
 
     while (curr_pos0.x, curr_pos0.y) != (curr_pos1.x, curr_pos1.y) {
-        curr_pos0.walk(&mut parsed);
-        curr_pos1.walk(&mut parsed);
+        curr_pos0.walk(&mut parsed)?;
+        curr_pos1.walk(&mut parsed)?;
     }
 
     println!(
         "Max seen: {}",
         max(curr_pos0.max_steps_seen, curr_pos1.max_steps_seen)
     );
+
+    Ok(())
 }
 
 pub struct Part1;
@@ -43,12 +45,12 @@ impl Part1 {
         let mut curr_pos0 = Position::new(pos, Direction::R);
         let mut curr_pos1 = Position::new(pos, Direction::L);
 
-        curr_pos0.walk(&mut parsed);
-        curr_pos1.walk(&mut parsed);
+        curr_pos1.walk(&mut parsed).unwrap();
+        // curr_pos0.walk(&mut parsed);
 
         while (curr_pos0.x, curr_pos0.y) != (curr_pos1.x, curr_pos1.y) {
-            curr_pos0.walk(&mut parsed);
-            curr_pos1.walk(&mut parsed);
+            curr_pos0.walk(&mut parsed).unwrap();
+            curr_pos1.walk(&mut parsed).unwrap();
         }
 
         println!(
@@ -58,10 +60,26 @@ impl Part1 {
     }
 }
 
+pub fn replace_start_with_pipe(map: &mut Vec<Vec<Pipe>>, start_pos: (isize, isize)) {
+    fn get(map: &Vec<Vec<Pipe>>, pos: (isize, isize)) -> Option<&Pipe> {
+        map.get(pos.1 as usize).and_then(|x| x.get(pos.0 as usize))
+    }
+    // get the 4 directly adjacent pipes and turn them into adjacency maps.
+    let mut adj_pipes = Vec::with_capacity(4);
+    // order the elements in the vec so it can be indexed by the direction from the start position
+    // up
+    get(map, (start_pos.0, start_pos.1 - 1)).and_then(|x| Some(adj_pipes.push(*x)));
+    get(map, (start_pos.0 + 1, start_pos.1)).and_then(|x| Some(adj_pipes.push(*x)));
+    get(map, (start_pos.0, start_pos.1 + 1)).and_then(|x| Some(adj_pipes.push(*x)));
+    get(map, (start_pos.0 - 1, start_pos.1)).and_then(|x| Some(adj_pipes.push(*x)));
+
+    dbg!(&adj_pipes);
+}
+
 /// parses `&str` to a map of pipes,
 /// each holding the pipes shape and the distance to the starting position
 ///
-/// # Returns
+/// ## Returns
 /// * starting position as `(x, y)` and
 /// * the map as `Vec<Vec<Pipe>>`
 fn parse(input: &str) -> ((isize, isize), Vec<Vec<Pipe>>) {
@@ -88,15 +106,15 @@ fn parse(input: &str) -> ((isize, isize), Vec<Vec<Pipe>>) {
         panic!("No starting position")
     };
 
-    return (start_pos, vec);
+    (start_pos, vec)
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum Direction {
-    U,
-    D,
-    L,
+    U = 0,
     R,
+    D,
+    L = 3,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -109,7 +127,6 @@ pub struct Position {
     pub max_steps_seen: u32,
 }
 use std::cmp::max;
-use std::fmt::write;
 use std::fmt::Debug;
 impl Position {
     fn walk(&mut self, map: &mut Vec<Vec<Pipe>>) -> Result<(), ()> {
@@ -177,12 +194,26 @@ impl From<char> for Pipe {
 impl Debug for Pipe {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let tmp = format!("{}({})", self.0, self.1);
-		f.write_str(&tmp)?;
-		Ok(())
+        f.write_str(&tmp)?;
+        Ok(())
     }
 }
 
 impl Pipe {
+    /// returns a list of the pipes connections. Index by
+    ///  `Direction as u8`
+    /// to get the connection as a `boolean`
+    fn adjacency_map(ch: Pipe) -> Result<[bool; 4], ()> {
+        match ch.0 {
+            '|' => Ok([true, false, true, false]),
+            '-' => Ok([false, true, false, true]),
+            'L' => Ok([true, true, false, false]),
+            'J' => Ok([true, false, false, true]),
+            'F' => Ok([false, true, true, true]),
+            _ => Err(()),
+        }
+    }
+
     fn from(ch: char) -> Self {
         Self(ch, 0)
     }
@@ -199,11 +230,18 @@ impl Pipe {
                 Direction::R => Direction::R,
                 _ => panic!("{d:?}"),
             })),
+
             'L' => Ok(Box::new(|d| match d {
                 Direction::L => Direction::U,
                 Direction::D => Direction::R,
                 _ => panic!("{d:?}"),
             })),
+            'F' => Ok(Box::new(|d| match d {
+                Direction::L => Direction::D,
+                Direction::U => Direction::R,
+                _ => panic!("{d:?}"),
+            })),
+
             'J' => Ok(Box::new(|d| match d {
                 Direction::R => Direction::U,
                 Direction::D => Direction::L,
@@ -214,11 +252,7 @@ impl Pipe {
                 Direction::R => Direction::D,
                 _ => panic!("{d:?}"),
             })),
-            'F' => Ok(Box::new(|d| match d {
-                Direction::L => Direction::D,
-                Direction::U => Direction::R,
-                _ => panic!("{d:?}"),
-            })),
+
             ch => Err(()),
         }
     }

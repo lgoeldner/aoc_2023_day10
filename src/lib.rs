@@ -1,9 +1,7 @@
-
-
 pub mod part2;
 
 #[rustfmt::skip]
-pub const TEST_DATA: [&str; 2] = 
+pub const TEST_DATA: [&str; 2] =
 	["-L|F7
 7S-7|
 L|7||
@@ -60,7 +58,7 @@ impl Part1 {
     }
 }
 
-pub fn replace_start_with_pipe(map: &mut Vec<Vec<Pipe>>, start_pos: (isize, isize)) {
+pub fn replace_start_with_pipe(map: &mut Vec<Vec<Pipe>>, start_pos: (isize, isize)) -> &Pipe {
     /// helper function to get a pipe at `pos: (x, y)` in `map`
     fn get(map: &Vec<Vec<Pipe>>, pos: (isize, isize)) -> Option<&Pipe> {
         // index the map safely and return an option
@@ -69,8 +67,8 @@ pub fn replace_start_with_pipe(map: &mut Vec<Vec<Pipe>>, start_pos: (isize, isiz
     }
 
     // get the 4 directly adjacent pipes to the starting point and turn them into adjacency maps.
-    let adj_pipes = vec![
-        // order the elements in the vec so it can be indexed by the direction from the start position
+    let adjacent_pipes = vec![
+        // order the elements in the vec, so it can be indexed by the direction from the start position
         // up
         get(map, (start_pos.0, start_pos.1 - 1)),
         get(map, (start_pos.0 + 1, start_pos.1)),
@@ -79,7 +77,7 @@ pub fn replace_start_with_pipe(map: &mut Vec<Vec<Pipe>>, start_pos: (isize, isiz
     ];
     // convert this vector into a vector of adjacency maps
     // ( as described by ̀[`Pipe::adjacency_map()`], a list of booleans standing for the possible connections a pipe can have)
-    let adjacency_maps: Vec<Option<[bool; 4]>> = adj_pipes
+    let adjacency_maps: Vec<Option<[bool; 4]>> = adjacent_pipes
         .iter()
         .map(|p| p.and_then(|pi| pi.adjacency_map().ok()))
         .collect();
@@ -88,7 +86,7 @@ pub fn replace_start_with_pipe(map: &mut Vec<Vec<Pipe>>, start_pos: (isize, isiz
     let start_point_map: [bool; 4] = zip(0..4, adjacency_maps)
         // convert the Options to booleans
         .map(
-            |(direction, map)| match dbg!(map.map(|map| dbg!(map[direction as usize]))) {
+            |(direction, map)| match map.map(|map| map[direction as usize]) {
                 Some(true) => true,
                 _ => false,
             },
@@ -101,7 +99,7 @@ pub fn replace_start_with_pipe(map: &mut Vec<Vec<Pipe>>, start_pos: (isize, isiz
     // reverse adjacency map to get the starting pipe that will replace S
     let final_pipe = dbg!(Pipe::from_adj_map(start_point_map, true));
     map[start_pos.1 as usize][start_pos.0 as usize] = final_pipe;
-    dbg!(&map[start_pos.1 as usize][start_pos.0 as usize]);
+    dbg!(&map[start_pos.1 as usize][start_pos.0 as usize])
 }
 
 /// parses `&str` to a map of pipes,
@@ -143,6 +141,20 @@ pub enum Direction {
     R,
     D,
     L = 3,
+}
+
+impl Direction {
+	pub fn start_direction(ch: char) -> Direction {
+		match ch {
+			'|' => Direction::U,
+			'-' => Direction::R,
+			'L' => Direction::R,
+			'J' => Direction::U,
+			'F' => Direction::R,
+			'7' => Direction::L,
+			_ => panic!("Invalid direction"),
+		}
+	}
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -233,25 +245,33 @@ impl Pipe {
     ///  `Direction as u8`
     /// to get the connection as a `boolean`
     pub fn adjacency_map(&self) -> Result<[bool; 4], ()> {
-        match self.0 {
+        let res = match self.0 {
             '|' => Ok([true, false, true, false]),
             '-' => Ok([false, true, false, true]),
             'L' => Ok([true, true, false, false]),
             'J' => Ok([true, false, false, true]),
             'F' => Ok([false, true, true, false]),
             _ => Err(()),
-        }
+        };
+
+        res.map(|mut arr| {
+            arr.rotate_right(2);
+            arr
+        })
     }
 
     pub fn from_adj_map(input: [bool; 4], part_of_loop: bool) -> Self {
         let ch = match input {
             [true, false, true, false] => '|',
-            [false, true, true, false] => '-',
-            // [false, true, false, true] => '-',
+            [false, true, false, true] => '-',
+
             [true, true, false, false] => 'L',
             [true, false, false, true] => 'J',
-            // [false, true, true, false] => 'F',
-            _ => panic!("Invalid input"),
+
+            [false, true, true, false] => 'F',
+            [false, false, true, true] => '7',
+
+            ch => panic!("Invalid input {ch:?}"),
         };
 
         Self(ch, if part_of_loop { 1 } else { 0 })

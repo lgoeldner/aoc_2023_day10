@@ -1,4 +1,4 @@
-use std::cmp::min;
+
 
 pub mod part2;
 
@@ -87,7 +87,12 @@ pub fn replace_start_with_pipe(map: &mut Vec<Vec<Pipe>>, start_pos: (isize, isiz
     // iterate over the adjacency maps
     let start_point_map: [bool; 4] = zip(0..4, adjacency_maps)
         // convert the Options to booleans
-        .map(|(direction, map)| map.map(|map| map[direction as usize]).is_some())
+        .map(
+            |(direction, map)| match dbg!(map.map(|map| dbg!(map[direction as usize]))) {
+                Some(true) => true,
+                _ => false,
+            },
+        )
         .collect::<Vec<_>>()
         // convert the result into an array
         .try_into()
@@ -241,11 +246,12 @@ impl Pipe {
     pub fn from_adj_map(input: [bool; 4], part_of_loop: bool) -> Self {
         let ch = match input {
             [true, false, true, false] => '|',
-            [false, true, false, true] => '-',
+            [false, true, true, false] => '-',
+            // [false, true, false, true] => '-',
             [true, true, false, false] => 'L',
             [true, false, false, true] => 'J',
-            [false, true, true, false] => 'F',
-            _ => ' ',
+            // [false, true, true, false] => 'F',
+            _ => panic!("Invalid input"),
         };
 
         Self(ch, if part_of_loop { 1 } else { 0 })
@@ -290,12 +296,13 @@ impl Pipe {
                 _ => panic!("{d:?}"),
             })),
 
-            ch => Err(()),
+            _ => Err(()),
         }
     }
 }
 
 /// struct that is an iterator that counts up until [`u64::MAX`] is reached
+#[derive(Debug)]
 pub struct Counter {
     step_size: i64,
     count: i64,
@@ -312,10 +319,10 @@ impl Counter {
 
     /// starts with your value and steps by 1
     pub fn with_start(initial: i64) -> Self {
-        Self {
+        dbg!(Self {
             count: initial,
             step_size: 1,
-        }
+        })
     }
 
     pub fn step_by(&mut self, new_step: i64) {
@@ -323,10 +330,13 @@ impl Counter {
     }
 
     pub fn incr(&mut self) -> Option<i64> {
-        self.count.checked_add(self.step_size)
+        self.count += self.step_size;
+        Some(self.count)
+        //self.count.checked_add(self.step_size)
     }
 
     pub fn increase(&mut self) {
         let _ = self.incr();
+        // println!("increased to {}", self.count);
     }
 }
